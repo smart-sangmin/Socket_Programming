@@ -32,7 +32,7 @@ def s_chat(sock):
 
 def listen():
     sock = socket(AF_INET, SOCK_STREAM)
-    sock.bind(("", 10002))
+    sock.bind(("", 10003))
     sock.listen()
     while True:
         other, addr = sock.accept()
@@ -59,7 +59,7 @@ def server_connect():
     Thread(target=receive, args=(sock,)).start()
 
 
-listen_port = 10002
+listen_port = 10003
 
 # chatting 하는 peer들의 socket 정보
 # index 0은 server와 통신하는 socket

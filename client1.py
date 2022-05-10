@@ -1,77 +1,100 @@
 import time
 from socket import *
-from threading import *
+from threading import Thread
 
 
-def chat(ip, port):  # 다른 사람에게 채팅 요청(client)
+def send(sock, msg):
+    msg = str(msg)
+    sock.send(msg.encode('utf-8'))
+
+
+def receive(sock):
+    while True:
+        data = sock.recv(1024)
+        data = data.decode('utf-8')
+        try:
+            idx = chat_list.index(sock)
+            if data:
+                print(idx, "번 peer:", data)
+            if data == "disconnect":
+                chat_list.pop(idx)
+                print(idx, "번 peer와의 채팅이 종료되었습니다.")
+                break
+        except ValueError:
+            break
+        time.sleep(1)
+
+
+def s_chat(sock):
+    print("\nChatting Program START")
+    Thread(target=receive, args=(sock,)).start()
+
+
+def listen():
     sock = socket(AF_INET, SOCK_STREAM)
-    print(ip, port)
-    sock.connect((ip, 22222))
+    sock.bind(("", 10001))
+    sock.listen()
+    while True:
+        other, addr = sock.accept()
+        print(len(chat_list), "번 peer의 socket object", other)
+        chat_list.append(other)
+        Thread(target=s_chat, args=(other,)).start()
+
+
+def connect(ip, port):
+    sock = socket(AF_INET, SOCK_STREAM)
+    sock.connect((ip, port))
+    chat_list.append(sock)
     print("접속 완료")
     print("\nChatting Program START")
-    while True:
-        # 메세지 보내기
-        msg = input(">>>")
-        sock.send(msg.encode())
-
-        # 메세지 받기
-        data = sock.recv(1024)
-        if not data or data[:10] == "disconnect":
-            print("Chatting Program END")
-            break
-        print("상대방 :", data.decode())
-        if not data:
-            print("Chatting Program END")
-            break
-    sock.close()
+    Thread(target=receive, args=(sock,)).start()
 
 
-def listen():  # 다른 사람에게 올 채팅 대기(server)
+def server_connect():
+    IP, PORT = '127.0.0.1', 9999
     sock = socket(AF_INET, SOCK_STREAM)
-    sock.bind(("", 11111))
-    sock.listen()
-    other_socket, addr = sock.accept()
-    print(str(addr), "과 접속되었습니다.")
-    Thread(target=server_chat, args=(other_socket, addr)).start()
+    chat_list.append(sock)
+    sock.connect((IP, PORT))
+    send(sock, listen_port)
+    Thread(target=receive, args=(sock,)).start()
 
 
-def server_chat(sock, addr):
-    print("\nChatting Program START")
-    while True:
-        # 메세지 받기
-        data = sock.recv(1024)
-        if not data or data[:10] == "disconnect":
-            print("Chatting Program END")
-            break
-        data = data.decode()
-        print("상대방 :", data)
-        msg = input(">>>")
-        sock.send(msg.encode())
-    sock.close()
+listen_port = 10001
 
-
-HOST = '127.0.0.1'
-PORT = 9999
-
-client_socket = socket(AF_INET, SOCK_STREAM)
-client_socket.connect((HOST, PORT))
-wait = Thread(target=listen, daemon=True)
-wait.start()
+# chatting 하는 peer들의 socket 정보
+# index 0은 server와 통신하는 socket
+chat_list = []
+server_connect()
+Thread(target=listen).start()
 
 while True:
-    msg = input('Enter Message to SERVER : ')
-    client_socket.send(msg.encode())
-    if msg == 'logoff':
+    msg = input()
+    if msg == "help":
+        send(chat_list[0], msg)
+    elif msg == "logoff":
+        print("종료")
+        send(chat_list[0], msg)
         exit()
+    elif msg == "online_users":
+        send(chat_list[0], msg)
+    elif msg[:4] == "talk":
+        com, peer, msg = msg.split()
+        peer = int(peer)
+        send(chat_list[peer], msg)
     elif msg[:7] == "connect":
-        msg, ip, port = msg.split()
-        chatting = Thread(target=chat, args=(ip, int(port)))
-        chatting.start()
-        # chatting이 종료 되기 전에는 서버와 통신 안 함. (다른 방법이 있을텐데 잘 모르겠음)
-        while True:
-            if not chatting.is_alive():
-                break
-            time.sleep(8)  # 컴퓨터가 힘들어 하기 때문
-    data = client_socket.recv(1024)
-
-    print('Received from the server :', data.decode())
+        com, ip, port = msg.split()
+        port = int(port)
+        connect(ip, port)
+    elif msg == "chatting":
+        msg = ""
+        for c in chat_list:
+            msg += str(c.add)
+        print(msg)
+    elif msg[:10] == "disconnect":
+        com, peer = msg.split()
+        peer = int(peer)
+        send(chat_list[peer], com)
+        chat_list.pop(peer)
+        print(peer, "번 peer와의 채팅이 종료되었습니다.")
+    else:
+        print("wrong command. try help command")
